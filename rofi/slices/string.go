@@ -3,7 +3,7 @@
 
 // nfn: NewStringSlice
 
-package godash
+package slices
 
 type chainString struct {
   isPtr bool

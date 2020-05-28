@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	r, err := rofi.NewFactory().WithMode(rofi.RofiModeWindow).NewRofi()
-	stdout, stderr, err := r.Run("foo\nbar\nbaz")
-	fmt.Printf("stdout: %q\nstderr: %q\nerr: %v\n", stdout, stderr, err)
+	r, err := rofi.NewFactory().WithDmenu("first", "second", "third").WithMessage("you must choose one, Luke").NewRofi()
+	result, err := r.Run()
+	fmt.Printf("result: %#v\nerr: %v\n", result, err)
 }

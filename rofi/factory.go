@@ -1,14 +1,14 @@
 package rofi
 
 // generate slice helpers for []string (requires github.com/jtyers/slice to be installed)
-//go:generate slice -type string -dir stringslice
+//go:generate slice -type string -dir slices -package slices
 
 import (
 	"fmt"
 	"io"
 	"os/exec"
 
-	"github.com/jtyers/rofi/stringslice"
+	"github.com/jtyers/go-rofi/rofi/slices"
 )
 
 // Arguments represents the arguments to pass to rofi, and is simply a string slice.
@@ -18,7 +18,7 @@ func (a Arguments) append(args Arguments) Arguments {
 	us := []string(a)
 	them := []string(args)
 
-	return Arguments(stringslice.Concat(us, them))
+	return Arguments(slices.ConcatString(us, them))
 }
 
 func NewArguments(args ...string) Arguments {
@@ -29,9 +29,6 @@ func NewArguments(args ...string) Arguments {
 type Factory struct {
 	// The Options passed to the factory
 	options []Option
-
-	// The stdin passed to the Rofi command
-	stdin io.Reader
 }
 
 func NewFactory() *Factory {
@@ -42,18 +39,31 @@ func NewFactory() *Factory {
 func (f *Factory) NewRofi() (*Rofi, error) {
 	args := Arguments{}
 
+	// The stdin passed to the Rofi command
+	var stdin io.Reader
+
 	for _, option := range f.options {
 		newArgs, err := option.ProvideArguments(args)
 		if err != nil {
 			return nil, fmt.Errorf("error applying %#v: %v", option, err)
 		}
 
-		args = append(args, newArgs)
+		args = args.append(newArgs)
+
+		if stdinOption, ok := option.(StdinOption); ok {
+			// if this is also an stdinOption, then use it to provide stdin to Rofi,
+			// but only if there is not already an stdin specified
+			if stdin != nil {
+				return nil, fmt.Errorf("error applying %#v: stdin already provided by a previous option", stdinOption)
+			}
+
+			stdin = stdinOption.ProvideStdin()
+		}
 	}
 
 	cmd := exec.Command("rofi", args...)
 
-	return &Rofi{cmd}, nil
+	return &Rofi{cmd, stdin}, nil
 }
 
 // WithOption configures the given Option on this factory.
@@ -77,28 +87,9 @@ const (
 	RofiModeWindowCd = "windowcd"
 )
 
-// WithMode sets the Rofi mode (via -show <mode>). Constants are provided for the known rofi modes.
-func (f *Factory) WithMode(mode string) *Factory {
-	return f.withOption(&ModeOption{mode})
-}
-
-// WithDmenu puts rofi in Dmenu mode (via -dmenu), where stdin is presented to the user and selected items are output to stdout.
-func (f *Factory) WithDmenu() *Factory {
-	return f.withOption(&DmenuOption{})
-}
-
-// WithDmenu puts rofi in Dmenu mode (via -dmenu), where stdin is presented to the user and selected items are output to stdout.
-func (f *Factory) WithStdin(stdin io.Reader) *Factory {
-	return f.withOption(&StdinOption{})
-}
-
-func (f *Factory) WithMessage() *Factory {
-	return f.withOption(&DmenuOption{})
-}
-
 // NewRofi is syntactic sugar for `NewFactory().WithOption(option).NewRofi()`
 func NewRofi(options ...Option) (*Rofi, error) {
-	f := Factory{options}
+	f := Factory{options: options}
 
 	return f.NewRofi()
 }
